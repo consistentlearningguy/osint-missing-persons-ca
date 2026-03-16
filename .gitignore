@@ -22,8 +22,9 @@ env/
 # Environment
 .env
 
-# Data
+# Data (runtime — not tracked)
 data/db.sqlite
+*.sqlite3
 data/faces/*
 data/images/*
 !data/faces/.gitkeep
@@ -36,3 +37,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Tools
+.opencode/

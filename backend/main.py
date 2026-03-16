@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized.")
 
-    # C3: Clean up any investigations stuck as "running" from a previous crash
+    # Clean up any investigations stuck as "running" from a previous crash
     db = next(get_db())
     try:
         cleaned = cleanup_stale_investigations(db)

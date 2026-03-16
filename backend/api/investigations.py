@@ -25,11 +25,11 @@ router = APIRouter(prefix="/api/investigations", tags=["investigations"])
 
 # --- Track running investigations to prevent duplicates ---
 _running_investigations: set[int] = set()  # case_objectids currently being investigated
-_MAX_CONCURRENT_INVESTIGATIONS = 3  # M4: rate limit
+_MAX_CONCURRENT_INVESTIGATIONS = 3
 
 
 def cleanup_stale_investigations(db: Session) -> int:
-    """C3: Mark stale 'running' investigations as 'failed' on startup.
+    """Mark stale 'running' investigations as 'failed' on startup.
 
     If the server crashed or was restarted while investigations were running,
     those records are stuck in 'running' forever. This cleans them up.
@@ -70,7 +70,7 @@ async def start_investigation(
     with the investigation ID. Poll GET /api/investigations/{case_objectid}
     to check status.
     """
-    # M4: rate limit
+    # Rate limit concurrent investigations
     if len(_running_investigations) >= _MAX_CONCURRENT_INVESTIGATIONS:
         raise HTTPException(
             status_code=429,
@@ -233,7 +233,6 @@ def get_leads(
     }
 
 
-# I7: review_notes should be a request body, not query parameter
 class LeadReviewBody(BaseModel):
     reviewed: bool
     is_actionable: Optional[bool] = None

@@ -12,7 +12,7 @@ An open-source intelligence (OSINT) platform designed to help locate missing chi
 
 ## Live Dashboard
 
-**[VIEW LIVE DASHBOARD](osint-missing-persons-ca-production.up.railway.app)**
+**[VIEW LIVE DASHBOARD](https://osint-missing-persons-ca-production.up.railway.app)**
 
 The public site is a free GitHub Pages app that reads the Missing Children Society of Canada public ArcGIS feed directly in the browser.
 

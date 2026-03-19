@@ -317,7 +317,7 @@ function renderCaseList(cases) {
                     </div>
                     <span class="status-tag status-${item.status}">${escapeHtml(item.statusLabel)}</span>
                 </div>
-                <p>Age ${item.age ?? "Unknown"}${item.gender ? ` · ${capitalize(item.gender)}` : ""}</p>
+                <p>Age ${item.age ?? "Unknown"}${item.gender ? ` | ${capitalize(item.gender)}` : ""}</p>
                 <p>Missing since ${item.missingDate ? formatDate(item.missingDate) : "Unknown"}</p>
             </div>
         `;

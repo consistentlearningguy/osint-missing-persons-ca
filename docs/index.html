@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missing Persons Canada Live Dashboard</title>
+    <meta
+        name="description"
+        content="Live public dashboard of active missing children cases in Canada. Search cases, explore the map, and find official reporting contacts."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    >
+    <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="page-glow page-glow-a"></div>
+        <div class="page-glow page-glow-b"></div>
+
+        <header class="masthead">
+            <div class="brand-lockup">
+                <div class="brand-mark">MP</div>
+                <div>
+                    <p class="eyebrow">Live Public Dashboard</p>
+                    <h1>Missing Persons Canada</h1>
+                </div>
+            </div>
+
+            <div class="masthead-actions">
+                <span class="status-pill" id="feedStatus">Connecting to live feed</span>
+                <a class="action-link" href="#help">How To Help</a>
+            </div>
+        </header>
+
+        <main class="layout">
+            <section class="hero-panel">
+                <div class="hero-copy">
+                    <p class="eyebrow">Public Awareness App</p>
+                    <h2>Live case tracking built for visibility, signal, and direct reporting.</h2>
+                    <p class="hero-text">
+                        This site pulls active missing children cases directly from the Missing Children Society of Canada public ArcGIS feed.
+                        Use it to search, share, and route tips to the listed authority or MCSC. Do not use it for harassment or vigilante action.
+                    </p>
+                </div>
+
+                <div class="hero-metrics">
+                    <article class="metric-card">
+                        <span class="metric-label">Active cases</span>
+                        <strong class="metric-value" id="statTotal">--</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span class="metric-label">High-risk alerts</span>
+                        <strong class="metric-value accent-warm" id="statHighRisk">--</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span class="metric-label">New in 30 days</span>
+                        <strong class="metric-value accent-fresh" id="statRecent">--</strong>
+                    </article>
+                    <article class="metric-card">
+                        <span class="metric-label">Last feed update</span>
+                        <strong class="metric-value metric-small" id="statUpdated">--</strong>
+                    </article>
+                </div>
+            </section>
+
+            <section class="control-bar">
+                <label class="field search-field">
+                    <span class="field-label">Search</span>
+                    <input id="searchInput" type="search" placeholder="Name, city, province">
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Province</span>
+                    <select id="provinceSelect">
+                        <option value="">All provinces</option>
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Case type</span>
+                    <select id="statusSelect">
+                        <option value="">All types</option>
+                        <option value="missing">Missing</option>
+                        <option value="vulnerable">Vulnerable</option>
+                        <option value="abudction">Abduction</option>
+                        <option value="amberalert">Amber Alert</option>
+                        <option value="childsearchalert">Child Search Alert</option>
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Sort</span>
+                    <select id="sortSelect">
+                        <option value="missing-desc">Newest missing date</option>
+                        <option value="missing-asc">Oldest missing date</option>
+                        <option value="age-asc">Youngest first</option>
+                        <option value="age-desc">Oldest first</option>
+                        <option value="name-asc">Name A-Z</option>
+                    </select>
+                </label>
+            </section>
+
+            <section class="dashboard-grid">
+                <div class="list-column card-surface">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Case Watch</p>
+                            <h3>Active profiles</h3>
+                        </div>
+                        <span class="panel-meta" id="resultsCount">-- results</span>
+                    </div>
+
+                    <div class="province-strip" id="provinceStrip"></div>
+
+                    <div class="case-list" id="caseList">
+                        <div class="empty-state loading-state">Loading live cases...</div>
+                    </div>
+                </div>
+
+                <div class="map-column card-surface">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">National Map</p>
+                            <h3>Last known locations</h3>
+                        </div>
+                        <button class="ghost-button" id="fitMapButton" type="button">Fit to results</button>
+                    </div>
+                    <div id="map" class="map-frame" aria-label="Map of active missing person cases"></div>
+                </div>
+
+                <aside class="detail-column card-surface">
+                    <div id="detailEmpty" class="detail-empty">
+                        <p class="eyebrow">Select a case</p>
+                        <h3>Open a profile to see reporting contacts and share-ready details.</h3>
+                        <p>
+                            Choose a marker or a card to open the current case summary, official authority contacts, and image gallery.
+                        </p>
+                    </div>
+
+                    <div id="detailPanel" class="detail-panel hidden">
+                        <div class="detail-topline">
+                            <span class="status-tag" id="detailStatus">--</span>
+                            <span class="detail-meta" id="detailMeta">--</span>
+                        </div>
+
+                        <h3 id="detailName">--</h3>
+                        <p class="detail-location" id="detailLocation">--</p>
+                        <p class="detail-summary" id="detailSummary">--</p>
+
+                        <div class="detail-gallery" id="detailGallery"></div>
+
+                        <dl class="detail-grid" id="detailGrid"></dl>
+
+                        <div class="detail-html card-inset" id="detailDescription"></div>
+
+                        <div class="action-stack">
+                            <a id="authorityLink" class="primary-action" href="#" target="_blank" rel="noopener">Open authority case page</a>
+                            <a id="mcscEmailLink" class="secondary-action" href="#">Email MCSC tips</a>
+                            <a id="authorityPhoneLink" class="secondary-action" href="#">Call listed authority</a>
+                        </div>
+                    </div>
+                </aside>
+            </section>
+
+            <section class="help-grid" id="help">
+                <article class="help-card">
+                    <p class="eyebrow">How To Help</p>
+                    <h3>Report to the listed authority first.</h3>
+                    <p>
+                        If you recognize a person or location, contact the agency shown on the case or MCSC directly.
+                        Preserve screenshots, times, and location context when reporting.
+                    </p>
+                </article>
+                <article class="help-card">
+                    <p class="eyebrow">Share With Care</p>
+                    <h3>Amplify the profile, not rumors.</h3>
+                    <p>
+                        Share official case details and photos. Avoid speculation, doxxing, or naming uninvolved people.
+                    </p>
+                </article>
+                <article class="help-card">
+                    <p class="eyebrow">Live Source</p>
+                    <h3>Data comes from MCSC’s public ArcGIS feed.</h3>
+                    <p>
+                        This app reads public case records directly in the browser, so the live site can run free on static hosting.
+                    </p>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+    ></script>
+    <script src="./assets/app.js" defer></script>
+</body>
+</html>

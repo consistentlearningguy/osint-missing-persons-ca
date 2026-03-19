@@ -12,18 +12,20 @@ An open-source intelligence (OSINT) platform designed to help locate missing chi
 
 ## Live Dashboard
 
-Deploy this repository to Railway and use the generated service URL for the live dashboard.
+**[VIEW LIVE DASHBOARD](https://consistentlearningguy.github.io/osint-missing-persons-ca/)**
 
-The dashboard shows active missing children cases across Canada on an interactive map, with case details, photos, and investigation tools.
+The public site is a free GitHub Pages app that reads the Missing Children Society of Canada public ArcGIS feed directly in the browser.
 
-API documentation is available at `/docs` on the deployed service URL.
+To publish it:
 
-For a stable public deployment:
+1. Open GitHub repository `Settings`
+2. Open `Pages`
+3. Under `Build and deployment`, choose `Deploy from a branch`
+4. Select branch `main`
+5. Select folder `/docs`
+6. Save and wait a few minutes for `https://consistentlearningguy.github.io/osint-missing-persons-ca/`
 
-- Mount a persistent volume and set `DATA_DIR=/data`
-- Set `DATABASE_URL=sqlite:////data/db.sqlite`
-- Keep Railway healthchecks pointed at `/healthz`
-- After deploy, replace this section with your live dashboard URL (or a custom domain) so the GitHub README link always works
+The legacy FastAPI backend remains in the repo for development, but the free public deployment target is the static app in `docs/`.
 
 ---
 
@@ -244,3 +246,4 @@ This project is in active development. If you are a law enforcement professional
 ## License
 
 [MIT](LICENSE)
+

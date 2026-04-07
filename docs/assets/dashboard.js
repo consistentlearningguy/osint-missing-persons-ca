@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   MERIDIAN — Missing Persons Intelligence Console
+   MAAT — Missing Persons Intelligence Console
    Main Application Module
    ═══════════════════════════════════════════════════════════ */
 
@@ -37,6 +37,8 @@ const CONNECTORS = [
   { id: "reddit-search", name: "Reddit Search", icon: "💬" },
   { id: "wayback-machine", name: "Wayback Machine", icon: "🏛️" },
   { id: "gdelt-doc", name: "GDELT Doc API", icon: "🌐" },
+  { id: "reverse-image", name: "Reverse Image Search", icon: "🔍" },
+  { id: "geospatial", name: "Geospatial Analysis", icon: "🗺️" },
 ];
 
 // ─── State ───
@@ -695,6 +697,369 @@ function renderTimeline() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// INTELLIGENCE ASSESSMENT (TraceLab-inspired)
+// ═══════════════════════════════════════════════════════════
+
+function generateAssessment() {
+  const c = state.selectedCase;
+  const leads = state.leads;
+  if (!c || !leads.length) {
+    $("#analysisEmpty").style.display = "";
+    $("#analysisContent").style.display = "none";
+    return;
+  }
+
+  $("#analysisEmpty").style.display = "none";
+  $("#analysisContent").style.display = "";
+
+  renderSituationOverview(c, leads);
+  renderEvidenceMetricsSummary(leads);
+  renderLeadClusters(leads);
+  renderHypotheses(c, leads);
+  renderActionItems(c, leads);
+  renderAuthorityBrief(c, leads);
+}
+
+function renderSituationOverview(c, leads) {
+  const days = c.missing_since ? daysSince(c.missing_since) : null;
+  const highLeads = leads.filter((l) => l.confidence >= 0.6).length;
+  const sources = [...new Set(leads.map((l) => l.source_name).filter(Boolean))];
+  const credible = leads.filter((l) => l.review_status === "credible").length;
+
+  let trail = "cold";
+  if (days !== null) {
+    if (days <= 7) trail = "hot";
+    else if (days <= 30) trail = "warm";
+    else if (days <= 90) trail = "cooling";
+  }
+
+  const trailColors = { hot: "var(--red)", warm: "var(--amber)", cooling: "var(--amber-bright)", cold: "var(--text-muted)" };
+  const trailLabels = { hot: "HOT (< 7 days)", warm: "WARM (< 30 days)", cooling: "COOLING (< 90 days)", cold: "COLD (> 90 days)" };
+
+  const body = $("#analysisSituation");
+  body.innerHTML = `
+    <p><strong>${escHtml(c.name)}</strong> has been missing${days !== null ? ` for <strong>${days} days</strong>` : ""} from 
+    <strong>${escHtml([c.city, c.province].filter(Boolean).join(", ") || "unknown location")}</strong>.
+    ${c.status ? `Status: <strong>${escHtml(STATUS_LABELS[(c.status || "").toLowerCase()] || c.status)}</strong>.` : ""}</p>
+    <p style="margin-top:8px">
+      Trail classification: <span style="color:${trailColors[trail]};font-weight:700;font-family:var(--font-mono)">${trailLabels[trail]}</span>
+    </p>
+    <p style="margin-top:8px">
+      MAAT gathered <strong>${leads.length} leads</strong> from <strong>${sources.length} sources</strong>.
+      Of these, <strong>${highLeads}</strong> are high-confidence (≥ 60%) and <strong>${credible}</strong> have been manually verified as credible.
+    </p>
+    ${c.authority_name ? `<p style="margin-top:8px">Investigating authority: <strong>${escHtml(c.authority_name)}</strong>${c.authority_phone ? ` — ${escHtml(c.authority_phone)}` : ""}</p>` : ""}`;
+}
+
+function renderEvidenceMetricsSummary(leads) {
+  const high = leads.filter((l) => l.confidence >= 0.6).length;
+  const med = leads.filter((l) => l.confidence >= 0.3 && l.confidence < 0.6).length;
+  const low = leads.filter((l) => l.confidence < 0.3).length;
+  const credible = leads.filter((l) => l.review_status === "credible").length;
+  const reviewed = leads.filter((l) => l.reviewed).length;
+
+  const metricsEl = $("#evidenceMetrics");
+  metricsEl.innerHTML = `
+    <div class="evidence-metric">
+      <div class="evidence-metric__value">${leads.length}</div>
+      <div class="evidence-metric__label">Total Leads</div>
+    </div>
+    <div class="evidence-metric evidence-metric--green">
+      <div class="evidence-metric__value">${high}</div>
+      <div class="evidence-metric__label">High Confidence</div>
+    </div>
+    <div class="evidence-metric evidence-metric--teal">
+      <div class="evidence-metric__value">${med}</div>
+      <div class="evidence-metric__label">Medium Confidence</div>
+    </div>
+    <div class="evidence-metric evidence-metric--red">
+      <div class="evidence-metric__value">${low}</div>
+      <div class="evidence-metric__label">Low Confidence</div>
+    </div>
+    <div class="evidence-metric">
+      <div class="evidence-metric__value">${credible}</div>
+      <div class="evidence-metric__label">Verified Credible</div>
+    </div>
+    <div class="evidence-metric">
+      <div class="evidence-metric__value">${reviewed}/${leads.length}</div>
+      <div class="evidence-metric__label">Reviewed</div>
+    </div>`;
+
+  // Source breakdown bars
+  const sourceCounts = {};
+  leads.forEach((l) => {
+    const cat = categorizeSource(l.source_name || "");
+    sourceCounts[cat] = (sourceCounts[cat] || 0) + 1;
+  });
+  const sorted = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]);
+  const max = sorted[0]?.[1] || 1;
+
+  const breakdownEl = $("#evidenceBreakdown");
+  breakdownEl.innerHTML = sorted.map(([cat, count]) => {
+    const pct = Math.round((count / max) * 100);
+    const cls = { news: "news", official: "official", social: "social", web: "web" }[cat] || "other";
+    return `
+      <div class="evidence-bar">
+        <span class="evidence-bar__label">${escHtml(cat)}</span>
+        <div class="evidence-bar__track">
+          <div class="evidence-bar__fill evidence-bar__fill--${cls}" style="width:${pct}%"></div>
+        </div>
+        <span class="evidence-bar__count">${count}</span>
+      </div>`;
+  }).join("");
+}
+
+function categorizeSource(name) {
+  const n = (name || "").toLowerCase();
+  if (n.includes("news") || n.includes("gdelt") || n.includes("bing-news") || n.includes("google-news")) return "news";
+  if (n.includes("official") || n.includes("canada-missing") || n.includes("mcsc") || n.includes("artifact")) return "official";
+  if (n.includes("reddit") || n.includes("social") || n.includes("community")) return "social";
+  if (n.includes("duckduckgo") || n.includes("wayback") || n.includes("searx") || n.includes("web")) return "web";
+  return "other";
+}
+
+function renderLeadClusters(leads) {
+  // Group by source category
+  const clusters = {};
+  leads.forEach((l) => {
+    const cat = categorizeSource(l.source_name || "");
+    if (!clusters[cat]) clusters[cat] = { leads: [], highCount: 0 };
+    clusters[cat].leads.push(l);
+    if (l.confidence >= 0.6) clusters[cat].highCount++;
+  });
+
+  const clusterEl = $("#clusterGrid");
+  const sorted = Object.entries(clusters).sort((a, b) => b[1].highCount - a[1].highCount);
+  
+  clusterEl.innerHTML = sorted.map(([cat, data]) => {
+    const bestLead = data.leads.sort((a, b) => (b.confidence || 0) - (a.confidence || 0))[0];
+    const cls = { news: "news", official: "official", social: "social" }[cat] || "";
+    return `
+      <div class="cluster-card${cls ? " cluster-card--" + cls : ""}">
+        <div class="cluster-card__name">${escHtml(capitalize(cat))} Intelligence</div>
+        <div class="cluster-card__count">${data.leads.length} leads · ${data.highCount} high-confidence</div>
+        <div class="cluster-card__desc">${bestLead ? escHtml(bestLead.title || "Strongest lead in this cluster") : "No leads"}</div>
+      </div>`;
+  }).join("");
+}
+
+function renderHypotheses(c, leads) {
+  const hypotheses = buildHypotheses(c, leads);
+  const listEl = $("#hypothesesList");
+
+  if (!hypotheses.length) {
+    listEl.innerHTML = '<p class="muted-text">Insufficient data to generate hypotheses. More leads are needed.</p>';
+    return;
+  }
+
+  listEl.innerHTML = hypotheses.map((h, i) => {
+    const confPct = Math.round(h.confidence * 100);
+    const confColor = h.confidence >= 0.6 ? "var(--green)" : h.confidence >= 0.3 ? "var(--amber)" : "var(--text-muted)";
+    return `
+      <div class="hypothesis-card">
+        <span class="hypothesis-card__rank">#${i + 1}</span>
+        <div class="hypothesis-card__title">${escHtml(h.title)}</div>
+        <div class="hypothesis-card__confidence">
+          <div class="hypothesis-card__conf-bar">
+            <div class="hypothesis-card__conf-fill" style="width:${confPct}%;background:${confColor}"></div>
+          </div>
+          <span class="hypothesis-card__conf-label" style="color:${confColor}">${confPct}% confidence</span>
+        </div>
+        <div class="hypothesis-card__body">${escHtml(h.description)}</div>
+        <div class="hypothesis-card__evidence">
+          ${h.evidence.map((e) => `<span class="hypothesis-evidence-tag">${escHtml(e)}</span>`).join("")}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function buildHypotheses(c, leads) {
+  const hypotheses = [];
+  const days = c.missing_since ? daysSince(c.missing_since) : null;
+  const highLeads = leads.filter((l) => l.confidence >= 0.6);
+  const newsLeads = leads.filter((l) => categorizeSource(l.source_name) === "news");
+  const socialLeads = leads.filter((l) => categorizeSource(l.source_name) === "social");
+  const officialLeads = leads.filter((l) => categorizeSource(l.source_name) === "official");
+
+  // Hypothesis: Active public awareness
+  if (newsLeads.length >= 2) {
+    const recentNews = newsLeads.filter((l) => l.published_at && daysSince(l.published_at) < 60);
+    const conf = Math.min(0.8, 0.3 + (recentNews.length * 0.1) + (highLeads.length * 0.05));
+    hypotheses.push({
+      title: "Active Media Coverage Suggests Ongoing Public Awareness",
+      description: `${newsLeads.length} news sources are covering this case${recentNews.length ? `, with ${recentNews.length} articles in the last 60 days` : ""}. This indicates continued public visibility which increases the probability of community tips and sightings.`,
+      confidence: Math.min(conf, 0.85),
+      evidence: newsLeads.slice(0, 3).map((l) => l.source_name || "News"),
+    });
+  }
+
+  // Hypothesis: Community engagement
+  if (socialLeads.length >= 1) {
+    const conf = Math.min(0.7, 0.2 + (socialLeads.length * 0.1));
+    hypotheses.push({
+      title: "Community Engagement Detected on Social Platforms",
+      description: `${socialLeads.length} social media source${socialLeads.length > 1 ? "s" : ""} show public discussion about this case. Community-sourced leads can surface sighting information not captured by official channels. These should be triaged carefully for actionable details.`,
+      confidence: Math.min(conf, 0.75),
+      evidence: socialLeads.slice(0, 3).map((l) => l.source_name || "Social"),
+    });
+  }
+
+  // Hypothesis: Trail temperature
+  if (days !== null && days > 30) {
+    const coldness = Math.min(1, days / 365);
+    const recentLeads = leads.filter((l) => l.published_at && daysSince(l.published_at) < 30);
+    if (recentLeads.length === 0) {
+      hypotheses.push({
+        title: "Cold Trail — Limited Recent Activity",
+        description: `${days} days have passed since the disappearance with no leads in the last 30 days. The trail is cooling significantly. Renewed media pushes, anniversary coverage, or targeted social media campaigns may help resurface the case.`,
+        confidence: 0.5 + (coldness * 0.2),
+        evidence: ["Timeline gap", `${days}d elapsed`, "No recent leads"],
+      });
+    } else {
+      hypotheses.push({
+        title: "Sustained Lead Generation Despite Elapsed Time",
+        description: `Despite ${days} days elapsed, ${recentLeads.length} lead${recentLeads.length > 1 ? "s" : ""} appeared in the last 30 days. The case maintains visibility. This sustained activity is a positive signal for resolution.`,
+        confidence: 0.4 + (recentLeads.length * 0.08),
+        evidence: [`${recentLeads.length} recent leads`, `${days}d elapsed`],
+      });
+    }
+  }
+
+  // Hypothesis: Official records completeness
+  if (officialLeads.length >= 1) {
+    hypotheses.push({
+      title: "Official Sources Provide Foundation for Investigation",
+      description: `${officialLeads.length} official source${officialLeads.length > 1 ? "s" : ""} confirm and enrich the case data. Cross-referencing official records with OSINT findings helps validate lead accuracy and fills information gaps.`,
+      confidence: 0.6,
+      evidence: officialLeads.slice(0, 3).map((l) => l.source_name || "Official"),
+    });
+  }
+
+  // Hypothesis: Geospatial pattern detection
+  if (c.latitude && c.longitude) {
+    const geoLeads = leads.filter((l) => l.latitude && l.longitude);
+    if (geoLeads.length >= 2) {
+      hypotheses.push({
+        title: "Geographic Clustering Detected in Lead Locations",
+        description: `${geoLeads.length} leads have geographic coordinates, allowing spatial pattern analysis. Clusters near transit corridors, border crossings, or highway routes may indicate travel vectors. Review the Evidence Map tab for visualization.`,
+        confidence: 0.35 + (geoLeads.length * 0.05),
+        evidence: [`${geoLeads.length} geo-located leads`, `Origin: ${escHtml(c.city || c.province || "Unknown")}`],
+      });
+    }
+  }
+
+  // Sort by confidence
+  hypotheses.sort((a, b) => b.confidence - a.confidence);
+  return hypotheses;
+}
+
+function renderActionItems(c, leads) {
+  const items = [];
+  const days = c.missing_since ? daysSince(c.missing_since) : null;
+  const highLeads = leads.filter((l) => l.confidence >= 0.6);
+  const unreviewed = leads.filter((l) => !l.reviewed);
+
+  // Always recommend reviewing high-confidence leads
+  if (highLeads.length > 0 && unreviewed.length > 0) {
+    items.push({
+      priority: "high",
+      title: `Review ${Math.min(highLeads.length, unreviewed.length)} unreviewed high-confidence leads`,
+      desc: "Triage leads in the Leads tab. Mark credible findings and dismiss duplicates to refine the assessment.",
+    });
+  }
+
+  // Report to authority
+  if (c.authority_name) {
+    items.push({
+      priority: "high",
+      title: `Share OSINT findings with ${c.authority_name}`,
+      desc: `Contact the investigating authority${c.authority_phone ? ` at ${c.authority_phone}` : ""} with credible leads. Use the Authority Brief above.`,
+    });
+  }
+
+  // Cold trail actions
+  if (days && days > 90) {
+    items.push({
+      priority: "medium",
+      title: "Consider social media renewal campaign",
+      desc: `The case is ${days} days old. A targeted social media push (anniversary posts, community shares) can resurface public attention.`,
+    });
+  }
+
+  // Reverse image suggestion
+  if (c.photo_url) {
+    items.push({
+      priority: "medium",
+      title: "Run reverse image search on case photo",
+      desc: "Upload the case photo to public reverse image tools (Google Images, TinEye) to detect reuse on social profiles or media not captured by text-based connectors.",
+    });
+  }
+
+  // Review web archives
+  items.push({
+    priority: "low",
+    title: "Check Wayback Machine for deleted content",
+    desc: "Cached pages and deleted social profiles may contain information no longer publicly accessible. Review Wayback connector results for archived snapshots.",
+  });
+
+  const container = $("#actionItems");
+  container.innerHTML = items.map((item) => `
+    <div class="action-item">
+      <span class="action-item__priority action-item__priority--${item.priority}">${item.priority}</span>
+      <div class="action-item__body">
+        <div class="action-item__title">${escHtml(item.title)}</div>
+        <div class="action-item__desc">${escHtml(item.desc)}</div>
+      </div>
+    </div>`).join("");
+}
+
+function renderAuthorityBrief(c, leads) {
+  const days = c.missing_since ? daysSince(c.missing_since) : null;
+  const high = leads.filter((l) => l.confidence >= 0.6);
+  const credible = leads.filter((l) => l.review_status === "credible");
+  const sources = [...new Set(leads.map((l) => l.source_name).filter(Boolean))];
+
+  let brief = `MAAT INTELLIGENCE BRIEF\n`;
+  brief += `Generated: ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC\n`;
+  brief += `${"─".repeat(50)}\n\n`;
+  brief += `SUBJECT: ${c.name || "Unknown"}\n`;
+  brief += `STATUS: ${STATUS_LABELS[(c.status || "").toLowerCase()] || c.status || "Unknown"}\n`;
+  brief += `LOCATION: ${[c.city, c.province].filter(Boolean).join(", ") || "Unknown"}\n`;
+  if (c.missing_since) brief += `MISSING SINCE: ${formatDate(c.missing_since)} (${days} days)\n`;
+  if (c.authority_name) brief += `AUTHORITY: ${c.authority_name}\n`;
+  brief += `\nINTELLIGENCE SUMMARY\n`;
+  brief += `${"─".repeat(30)}\n`;
+  brief += `Total leads gathered: ${leads.length}\n`;
+  brief += `High-confidence leads: ${high.length}\n`;
+  brief += `Manually verified credible: ${credible.length}\n`;
+  brief += `Sources queried: ${sources.length} (${sources.join(", ")})\n`;
+
+  if (high.length) {
+    brief += `\nTOP LEADS\n`;
+    brief += `${"─".repeat(30)}\n`;
+    high.slice(0, 5).forEach((l, i) => {
+      brief += `${i + 1}. [${((l.confidence || 0) * 100).toFixed(0)}%] ${l.title || "Untitled"}\n`;
+      brief += `   Source: ${l.source_name || "Unknown"}`;
+      if (l.source_url) brief += ` | ${l.source_url}`;
+      brief += `\n`;
+    });
+  }
+
+  if (credible.length) {
+    brief += `\nVERIFIED CREDIBLE LEADS\n`;
+    brief += `${"─".repeat(30)}\n`;
+    credible.forEach((l, i) => {
+      brief += `${i + 1}. ${l.title || "Untitled"} (${l.source_name || "Unknown"})\n`;
+    });
+  }
+
+  brief += `\nDISCLAIMER: This brief is machine-generated from public OSINT sources.\nAll findings are unverified and should be shared with the investigating authority.\nDo not act independently — report, don't intervene.\n`;
+
+  const briefEl = $("#briefOutput");
+  briefEl.textContent = brief;
+}
+
+// ═══════════════════════════════════════════════════════════
 // MAPS
 // ═══════════════════════════════════════════════════════════
 
@@ -926,6 +1291,10 @@ function switchTab(tabName) {
   // Lazy init maps when switching to map tab
   if (tabName === "map") {
     setTimeout(() => renderEvidenceMap(), 100);
+  }
+  // Generate assessment when switching to analysis tab
+  if (tabName === "analysis") {
+    generateAssessment();
   }
 }
 
@@ -1256,7 +1625,18 @@ ${escHtml(JSON.stringify(data, null, 2))}
     if (e.target === e.currentTarget) closeModal();
   });
 
-  console.log("[MERIDIAN] Intelligence Console booted ✓");
+  // Copy brief button
+  $("#copyBriefBtn").addEventListener("click", () => {
+    const text = $("#briefOutput").textContent;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      showToast("Authority brief copied to clipboard", "success");
+    }).catch(() => {
+      showToast("Failed to copy — use manual selection", "warning");
+    });
+  });
+
+  console.log("[MAAT] Intelligence Console booted ✓");
 }
 
 // Boot when DOM ready

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 from xml.etree import ElementTree
 
 import httpx
@@ -17,6 +17,23 @@ from backend.osint.query_planner import build_news_query_plan
 
 
 BING_NEWS_RSS_BASE = "https://www.bing.com/news/search"
+
+
+def _extract_destination_url(link: str) -> str:
+    """Unwrap Bing redirect URLs to the real destination article URL.
+
+    Bing News RSS returns links like:
+      http://www.bing.com/news/apiclick.aspx?...&url=https%3a%2f%2fwww.example.com%2farticle&...
+    Different queries/sessions produce different tracking params (tid, aid, c)
+    for the same underlying article. Extracting the real URL fixes dedup.
+    """
+    parts = urlsplit(link)
+    if "bing.com" in parts.netloc.lower() and "/news/apiclick" in parts.path.lower():
+        qs = parse_qs(parts.query)
+        real_urls = qs.get("url", [])
+        if real_urls and real_urls[0]:
+            return real_urls[0]
+    return link
 
 
 def _parse_rfc2822(value: str | None) -> datetime | None:
@@ -48,7 +65,7 @@ class BingNewsConnector:
         if not self.enabled():
             return ConnectorRunResult(warning="Bing News RSS connector disabled by configuration.")
 
-        query_plan = build_news_query_plan(context, limit=4)
+        query_plan = build_news_query_plan(context, limit=6)
         if not query_plan:
             return ConnectorRunResult(warning="No news queries could be built from the case facts.")
 
@@ -119,6 +136,11 @@ class BingNewsConnector:
 
                     if not link or link in seen_urls:
                         continue
+
+                    real_url = _extract_destination_url(link)
+                    if real_url in seen_urls:
+                        continue
+                    seen_urls.add(real_url)
                     seen_urls.add(link)
                     added += 1
 
@@ -134,7 +156,7 @@ class BingNewsConnector:
                             lead_type="news-article",
                             category="news-monitoring",
                             source_name=source_name,
-                            source_url=link,
+                            source_url=real_url,
                             query_used=query,
                             found_at=datetime.now(timezone.utc),
                             title=title or "Untitled news result",

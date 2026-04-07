@@ -91,7 +91,7 @@ class WaybackMachineConnector:
                         "https://web.archive.org/cdx/search/cdx",
                         params=params,
                         headers={
-                            "User-Agent": "osint-missing-persons-ca/1.0 (research)",
+                            "User-Agent": "maat-intelligence/2.0 (research)",
                         },
                     )
                     response.raise_for_status()

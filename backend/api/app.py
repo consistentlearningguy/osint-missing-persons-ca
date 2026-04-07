@@ -26,9 +26,9 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Create the backend app."""
     app = FastAPI(
-        title="OSINT Missing Persons CA Backend",
-        version="1.0.0",
-        description="Optional investigator/developer backend for case sync, exports, and enrichment.",
+        title="MAAT Intelligence Backend",
+        version="2.0.0",
+        description="MAAT — Truth from Chaos. Backend for case sync, OSINT enrichment, lead synthesis, and authority notification.",
         lifespan=lifespan,
     )
 

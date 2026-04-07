@@ -51,7 +51,7 @@ def _date_markers(context: QueryContext) -> list[str]:
     return markers
 
 
-def build_public_query_plan(context: QueryContext, limit: int = 6) -> list[str]:
+def build_public_query_plan(context: QueryContext, limit: int = 10) -> list[str]:
     """Build a small, reviewable set of public-search queries.
 
     The planner deliberately stays bounded and only uses high-level official facts
@@ -75,10 +75,13 @@ def build_public_query_plan(context: QueryContext, limit: int = 6) -> list[str]:
     seen: set[str] = set()
 
     _push_query(queries, seen, f'"{name}"')
+    _push_query(queries, seen, f'"{name}" missing')
+    _push_query(queries, seen, f'"{name}" "last seen"')
     if location_text and location_text.lower() not in {city.lower(), province.lower()}:
         _push_query(queries, seen, f'"{name}" "{location_text}"')
     if city:
         _push_query(queries, seen, f'"{name}" "{city}"')
+        _push_query(queries, seen, f'"{name}" missing "{city}"')
     if province:
         _push_query(queries, seen, f'"{name}" "{province}"')
     if city and province:
@@ -232,7 +235,7 @@ def build_trace_labs_query_groups(context: QueryContext) -> list[dict[str, objec
     return groups
 
 
-def build_news_query_plan(context: QueryContext, limit: int = 6) -> list[str]:
+def build_news_query_plan(context: QueryContext, limit: int = 8) -> list[str]:
     """Build a bounded set of news-focused queries for timeline/news connectors."""
 
     names = _context_names(context, limit=2)
@@ -279,7 +282,7 @@ def build_news_query_plan(context: QueryContext, limit: int = 6) -> list[str]:
     return queries[:limit]
 
 
-def build_investigator_query_plan(context: QueryContext, limit: int = 12) -> list[str]:
+def build_investigator_query_plan(context: QueryContext, limit: int = 18) -> list[str]:
     """Flatten grouped Trace Labs-style queries into a bounded automation-safe plan."""
 
     grouped = {

@@ -30,6 +30,8 @@ from backend.osint.aggregation import merge_normalized_leads
 from backend.osint.connectors.registry import enabled_connectors
 from backend.osint.normalization.models import QueryContext
 from backend.osint.scoring.lead_scoring import score_lead
+from backend.osint.synthesis import synthesize_investigation
+from backend.osint.hypothesis import generate_hypothesis
 from backend.enrichment.resources import resource_links_for_province
 from shared.utils.dates import isoformat
 
@@ -320,29 +322,216 @@ async def investigate_case(session, case: Case) -> InvestigationRun:
         if len(low_value) > 5:
             print(f"\n  ... and {len(low_value) - 5} more low-value leads")
 
-    # Actionable summary
-    _print_section("ACTIONABLE SUMMARY")
-    if high_value:
-        print(f"\n  {len(high_value)} high-value lead(s) found!")
-        print(f"  These leads have the highest correlation with case facts.")
-        print(f"\n  NEXT STEPS:")
-        print(f"  1. Review each high-value lead URL directly")
-        print(f"  2. Screenshot and archive any corroborating evidence")
-        print(f"  3. Cross-reference against the official authority posting")
-        if case.authority_name:
-            print(f"  4. Report any actionable information to {case.authority_name}")
-        if case.authority_phone:
-            print(f"     Phone: {case.authority_phone}")
-        if case.mcsc_email:
-            print(f"     MCSC tips: {case.mcsc_email}")
-        if case.mcsc_phone:
-            print(f"     MCSC phone: {case.mcsc_phone}")
-    else:
-        print(f"\n  No high-value leads found in this run.")
-        print(f"  Consider:")
-        print(f"  - Expanding search with additional aliases")
-        print(f"  - Checking social media manually")
-        print(f"  - Monitoring for new developments")
+    # ── MAAT Intelligence Synthesis ──────────────────────────────────
+    _print_section("MAAT INTELLIGENCE SYNTHESIS")
+    lead_dicts = [
+        {
+            "title": l.title,
+            "confidence": l.confidence,
+            "lead_type": l.lead_type,
+            "category": l.category,
+            "source_name": l.source_name,
+            "source_url": l.source_url,
+            "source_kind": l.source_kind,
+            "published_at": isoformat(l.published_at),
+            "found_at": isoformat(l.found_at),
+            "location_text": l.location_text,
+            "latitude": l.latitude,
+            "longitude": l.longitude,
+            "content_excerpt": l.content_excerpt,
+            "rationale": l.rationale,
+            "source_trust": l.source_trust,
+            "corroboration_count": l.corroboration_count,
+        }
+        for l in sorted_leads
+    ]
+
+    case_dict = {
+        "name": case.name,
+        "age": case.age,
+        "city": case.city,
+        "province": case.province,
+        "missing_since": isoformat(case.missing_since),
+        "authority_name": case.authority_name,
+        "authority_phone": case.authority_phone,
+        "mcsc_email": case.mcsc_email,
+        "mcsc_phone": case.mcsc_phone,
+    }
+
+    from dataclasses import asdict
+    synthesis = synthesize_investigation(
+        case_id=case.id,
+        case_name=case.name or "",
+        leads=lead_dicts,
+        missing_since=case.missing_since,
+        case_lat=case.latitude,
+        case_lon=case.longitude,
+        authority_name=case.authority_name,
+        authority_phone=case.authority_phone,
+    )
+    synth_data = asdict(synthesis)
+
+    # Print situation summary
+    if synthesis.situation_summary:
+        print(f"\n  SITUATION ASSESSMENT:")
+        print(f"  {synthesis.situation_summary}")
+
+    # Print key metrics
+    print(f"\n  INTELLIGENCE METRICS:")
+    print(f"    Lead clusters:  {len(synthesis.clusters)}")
+    print(f"    Timeline events: {len(synthesis.timeline)}")
+    print(f"    Geo patterns:   {len(synthesis.geographic_patterns)}")
+    print(f"    Temporal patterns: {len(synthesis.temporal_patterns)}")
+    print(f"    Recommendations: {len(synthesis.recommendations)}")
+
+    # Print recommendations by priority
+    if synthesis.recommendations:
+        _print_section("MAAT RECOMMENDATIONS", "*")
+        for rec in synthesis.recommendations:
+            priority_label = {1: "CRITICAL", 2: "HIGH", 3: "MEDIUM"}.get(rec.priority, "LOW")
+            print(f"\n  [{priority_label}] {rec.action}")
+            print(f"    Rationale: {rec.rationale}")
+            if rec.contact_info:
+                print(f"    Contact: {rec.contact_info}")
+
+    # Print lead clusters
+    if synthesis.clusters:
+        _print_section("LEAD CLUSTERS", "-")
+        for i, cluster in enumerate(synthesis.clusters, 1):
+            conf_bar = "█" * int(cluster.max_confidence * 20) + "░" * (20 - int(cluster.max_confidence * 20))
+            print(f"\n  Cluster {i}: {cluster.theme.upper()}")
+            print(f"    Leads: {len(cluster.lead_ids)} | Max conf: {cluster.max_confidence:.3f} [{conf_bar}]")
+            print(f"    Sources: {', '.join(cluster.unique_sources[:5])}")
+            if cluster.location_text:
+                print(f"    Location: {cluster.location_text}")
+            if cluster.date_range_start or cluster.date_range_end:
+                print(f"    Date range: {cluster.date_range_start or '?'} → {cluster.date_range_end or '?'}")
+
+    # Print geographic patterns
+    if synthesis.geographic_patterns:
+        _print_section("GEOGRAPHIC PATTERNS", "-")
+        for pat in synthesis.geographic_patterns:
+            sig = (pat.get('significance') or 'medium').upper()
+            print(f"\n  [{sig}] {pat.get('type', 'pattern')}")
+            print(f"    {pat.get('label', '')}")
+
+    # Print temporal patterns
+    if synthesis.temporal_patterns:
+        _print_section("TEMPORAL PATTERNS", "-")
+        for pat in synthesis.temporal_patterns:
+            sig = (pat.get('significance') or 'medium').upper()
+            print(f"\n  [{sig}] {pat.get('type', 'pattern')}")
+            print(f"    {pat.get('label', '')}")
+
+    # Print authority brief
+    if synthesis.authority_brief:
+        _print_section("AUTHORITY NOTIFICATION BRIEF", "=")
+        print(f"\n{synthesis.authority_brief}")
+
+    # ── MAAT Hypothesis Engine — Educated Guess ─────────────────────
+    _print_section("MAAT HYPOTHESIS ENGINE — Analytical Conclusion", "=")
+
+    from backend.enrichment.geospatial import build_geo_context
+    geo_context = build_geo_context(case.latitude, case.longitude)
+
+    hypothesis = generate_hypothesis(
+        case_id=case.id,
+        case_name=case.name or "",
+        case_age=case.age,
+        case_city=case.city,
+        case_province=case.province,
+        case_lat=case.latitude,
+        case_lon=case.longitude,
+        missing_since=case.missing_since,
+        leads=lead_dicts,
+        geo_context=geo_context,
+    )
+    hypothesis_data = {
+        "primary_scenario": hypothesis.primary_scenario,
+        "primary_scenario_confidence": hypothesis.primary_scenario_confidence,
+        "confidence_level": hypothesis.confidence_level,
+        "demographic_profile": hypothesis.demographic_profile,
+        "behavioral_indicators": hypothesis.behavioral_indicators,
+        "scenarios": [
+            {
+                "name": s.name,
+                "weight": s.weight,
+                "confidence": s.confidence,
+                "evidence_for": s.evidence_for,
+                "evidence_against": s.evidence_against,
+            }
+            for s in hypothesis.scenarios
+        ],
+        "geographic_assessment": {
+            "probable_zone": hypothesis.geographic_assessment.probable_zone,
+            "confidence": hypothesis.geographic_assessment.confidence,
+            "nearby_infrastructure": hypothesis.geographic_assessment.nearby_infrastructure,
+        },
+        "conclusion": hypothesis.conclusion,
+        "key_evidence_summary": hypothesis.key_evidence_summary,
+        "recommended_search_areas": hypothesis.recommended_search_areas,
+        "critical_actions": hypothesis.critical_actions,
+        "data_quality_note": hypothesis.data_quality_note,
+    }
+
+    # Print demographic profile
+    print(f"\n  DEMOGRAPHIC PROFILE:")
+    print(f"  {hypothesis.demographic_profile}")
+    print(f"\n  BEHAVIORAL INDICATORS:")
+    for ind in hypothesis.behavioral_indicators:
+        print(f"    - {ind}")
+
+    # Print scenarios ranked by weight
+    print(f"\n  SCENARIO ANALYSIS:")
+    for i, scenario in enumerate(hypothesis.scenarios, 1):
+        bar = "█" * int(scenario.weight * 20) + "░" * (20 - int(scenario.weight * 20))
+        print(f"\n    {i}. {scenario.name} [{bar}] {scenario.weight:.2f} ({scenario.confidence})")
+        if scenario.evidence_for:
+            for ev in scenario.evidence_for:
+                print(f"       + {ev}")
+        if scenario.evidence_against:
+            for ev in scenario.evidence_against:
+                print(f"       - {ev}")
+
+    # Print geographic assessment
+    print(f"\n  GEOGRAPHIC PROBABILITY:")
+    print(f"    {hypothesis.geographic_assessment.probable_zone}")
+    if hypothesis.geographic_assessment.nearby_infrastructure:
+        print(f"\n    Nearby infrastructure:")
+        for infra in hypothesis.geographic_assessment.nearby_infrastructure:
+            print(f"      - {infra}")
+
+    # Print the conclusive educated guess
+    _print_section("EDUCATED GUESS — Final Assessment", "*")
+    print(f"\n{hypothesis.conclusion}")
+    print(f"\n  Overall confidence: {hypothesis.confidence_level.upper()}")
+    print(f"  Data quality: {hypothesis.data_quality_note}")
+
+    if hypothesis.key_evidence_summary:
+        print(f"\n  KEY EVIDENCE:")
+        for ev in hypothesis.key_evidence_summary:
+            print(f"    - {ev}")
+
+    if hypothesis.recommended_search_areas:
+        print(f"\n  RECOMMENDED SEARCH AREAS:")
+        for area in hypothesis.recommended_search_areas:
+            print(f"    - {area}")
+
+    if hypothesis.critical_actions:
+        print(f"\n  CRITICAL NEXT ACTIONS:")
+        for action in hypothesis.critical_actions:
+            print(f"    >> {action}")
+
+    # Contact information
+    _print_section("CONTACT FOR TIPS")
+    if case.authority_name:
+        print(f"\n  Investigating authority: {case.authority_name}")
+    if case.authority_phone:
+        print(f"  Authority phone: {case.authority_phone}")
+    if case.mcsc_email:
+        print(f"  MCSC tips email: {case.mcsc_email}")
+    if case.mcsc_phone:
+        print(f"  MCSC phone: {case.mcsc_phone}")
 
     # Export leads to JSON
     export_path = settings.data_dir / "investigations"
@@ -383,6 +572,8 @@ async def investigate_case(session, case: Case) -> InvestigationRun:
             }
             for i, l in enumerate(sorted_leads)
         ],
+        "synthesis": synth_data,
+        "hypothesis": hypothesis_data,
     }
 
     with open(export_file, "w", encoding="utf-8") as f:
@@ -399,7 +590,7 @@ async def main() -> None:
     parser.add_argument("--skip-sync", action="store_true", help="Skip syncing cases from MCSC")
     args = parser.parse_args()
 
-    _print_section("OSINT MISSING PERSONS INVESTIGATION PIPELINE")
+    _print_section("MAAT INTELLIGENCE PIPELINE — Truth from Chaos")
     print(f"  Investigator mode: {settings.enable_investigator_mode}")
     print(f"  Clear web connectors: {settings.enable_clear_web_connectors}")
     print(f"  Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")

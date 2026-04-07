@@ -21,14 +21,14 @@ def test_build_public_query_plan_is_bounded_and_deduplicated():
         location_text="Wynford Dr & Concorde Pl, Toronto, ON",
     )
 
-    queries = build_public_query_plan(context, limit=6)
+    queries = build_public_query_plan(context, limit=10)
 
     assert queries[0] == '"Sample Case Toronto"'
     assert any('"Wynford Dr & Concorde Pl, Toronto, ON"' in query for query in queries)
     assert any('"Toronto"' in query for query in queries)
     assert any('"Ontario"' in query for query in queries)
     assert any('"SCT"' in query for query in queries)
-    assert len(queries) <= 6
+    assert len(queries) <= 10
     assert len(set(queries)) == len(queries)
 
 

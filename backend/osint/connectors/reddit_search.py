@@ -97,7 +97,7 @@ class RedditSearchConnector:
                             "limit": "10",
                         },
                         headers={
-                            "User-Agent": "osint-missing-persons-ca/1.0 (academic research tool)",
+                            "User-Agent": "maat-intelligence/2.0 (academic research tool)",
                         },
                     )
                     response.raise_for_status()
@@ -121,8 +121,6 @@ class RedditSearchConnector:
                     source_url = entry.get("link", "")
                     if not source_url or source_url in seen_urls:
                         continue
-                    seen_urls.add(source_url)
-                    added += 1
 
                     # Parse timestamp
                     published_at = None
@@ -141,6 +139,26 @@ class RedditSearchConnector:
                     clean_content = re.sub(r"&[a-z]+;", " ", clean_content)
                     clean_content = re.sub(r"\s+", " ", clean_content).strip()[:400]
 
+                    # Relevance gate: require meaningful name overlap.
+                    # For multi-word names, need at least 2 parts matching
+                    # (or the full last name).  This filters out noise like
+                    # "Kai'Sa" matching "Kaisa Raine Morin".
+                    text_blob = f"{title} {clean_content}".lower()
+                    name_parts = [p.lower() for p in (context.name or "").split() if len(p) > 2]
+                    if name_parts:
+                        matching_parts = sum(1 for p in name_parts if p in text_blob)
+                        threshold = min(2, len(name_parts))  # need 2 parts unless single-word name
+                        if matching_parts < threshold:
+                            continue
+
+                    # Extra: boost if missing-person keywords are present
+                    _missing_kw = {"missing", "disappeared", "last seen", "police", "search",
+                                   "amber alert", "rcmp", "help find", "have you seen"}
+                    has_missing_context = any(kw in text_blob for kw in _missing_kw)
+
+                    seen_urls.add(source_url)
+                    added += 1
+
                     # Determine trust based on subreddit relevance
                     trust = 0.40
                     rationale_notes = [
@@ -158,6 +176,9 @@ class RedditSearchConnector:
                     if subreddit.lower() in relevant_subs:
                         trust = 0.55
                         rationale_notes.append(f"Posted in a relevant subreddit (r/{subreddit}).")
+                    if has_missing_context:
+                        trust = min(trust + 0.15, 0.70)
+                        rationale_notes.append("Contains missing-person keywords.")
 
                     summary_text = clean_content if clean_content else f"Reddit discussion on r/{subreddit}"
 

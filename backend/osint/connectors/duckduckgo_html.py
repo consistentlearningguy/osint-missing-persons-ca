@@ -26,6 +26,30 @@ except ImportError:
         _HAS_DDGS = False
 
 
+def _name_relevant(context: QueryContext, title: str, body: str) -> bool:
+    """Require at least part of the person's name in the result to avoid noise."""
+    if not context.name:
+        return True
+    text_blob = f"{title} {body}".lower()
+    name_parts = [p.lower() for p in context.name.split() if len(p) >= 3]
+    if not name_parts:
+        return True
+    threshold = min(2, len(name_parts))
+    return sum(1 for p in name_parts if p in text_blob) >= threshold
+
+
+_ADULT_KEYWORDS = {
+    "porn", "pornstar", "xxx", "onlyfans", "escort", "nylon-queens",
+    "foxy reviews", "adult film", "webcam model", "stripper",
+}
+
+
+def _is_adult_content(title: str, body: str) -> bool:
+    """Reject results containing explicit adult content keywords."""
+    text_blob = f"{title} {body}".lower()
+    return any(kw in text_blob for kw in _ADULT_KEYWORDS)
+
+
 class DuckDuckGoHtmlConnector:
     """Free web + news search via DuckDuckGo (ddgs library)."""
 
@@ -50,8 +74,8 @@ class DuckDuckGoHtmlConnector:
                 )
             return ConnectorRunResult(warning="DuckDuckGo connector disabled by configuration.")
 
-        query_plan = build_public_query_plan(context, limit=4)
-        news_plan = build_news_query_plan(context, limit=2)
+        query_plan = build_public_query_plan(context, limit=6)
+        news_plan = build_news_query_plan(context, limit=4)
 
         leads: list[NormalizedLead] = []
         query_logs: list[dict[str, object]] = []
@@ -62,11 +86,17 @@ class DuckDuckGoHtmlConnector:
         # Web search
         for query in query_plan:
             try:
-                results = ddgs.text(query, region="ca-en", max_results=8)
+                results = ddgs.text(query, region="ca-en", max_results=12)
                 added = 0
                 for result in results:
                     source_url = result.get("href", "")
                     if not source_url or source_url in seen_urls:
+                        continue
+                    title = result.get("title", "Untitled result")
+                    body = result.get("body", "")
+                    if not _name_relevant(context, title, body):
+                        continue
+                    if _is_adult_content(title, body):
                         continue
                     seen_urls.add(source_url)
                     added += 1
@@ -81,9 +111,9 @@ class DuckDuckGoHtmlConnector:
                             source_url=source_url,
                             query_used=query,
                             found_at=datetime.now(timezone.utc),
-                            title=result.get("title", "Untitled result"),
-                            summary=result.get("body", "Public web search result"),
-                            content_excerpt=(result.get("body") or "")[:500],
+                            title=title,
+                            summary=body or "Public web search result",
+                            content_excerpt=body[:500],
                             location_text=context.city or context.province,
                             source_trust=0.45,
                             rationale=[
@@ -124,6 +154,12 @@ class DuckDuckGoHtmlConnector:
                     source_url = result.get("url", "")
                     if not source_url or source_url in seen_urls:
                         continue
+                    title = result.get("title", "Untitled news result")
+                    body = result.get("body", "")
+                    if not _name_relevant(context, title, body):
+                        continue
+                    if _is_adult_content(title, body):
+                        continue
                     seen_urls.add(source_url)
                     added += 1
 
@@ -148,9 +184,9 @@ class DuckDuckGoHtmlConnector:
                             query_used=query,
                             found_at=datetime.now(timezone.utc),
                             published_at=published_at,
-                            title=result.get("title", "Untitled news result"),
-                            summary=result.get("body", "News article from DuckDuckGo"),
-                            content_excerpt=(result.get("body") or "")[:500],
+                            title=title,
+                            summary=body or "News article from DuckDuckGo",
+                            content_excerpt=body[:500],
                             location_text=context.city or context.province,
                             source_trust=0.50,
                             rationale=[

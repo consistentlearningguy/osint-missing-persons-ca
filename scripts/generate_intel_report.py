@@ -92,7 +92,7 @@ def generate_report(session, case_id: int | None = None) -> str:
 
     lines: list[str] = []
     lines.append("=" * 80)
-    lines.append("  OSINT INTELLIGENCE REPORT — MISSING PERSONS CANADA")
+    lines.append("  MAAT INTELLIGENCE REPORT — Truth from Chaos")
     lines.append(f"  Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     lines.append(f"  Cases analyzed: {len(cases_data)}")
     lines.append("=" * 80)

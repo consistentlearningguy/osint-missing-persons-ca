@@ -102,7 +102,7 @@ class GdeltDocConnector:
                         params=params,
                         headers={
                             "Accept": "application/json",
-                            "User-Agent": "osint-missing-persons-ca/1.0",
+                            "User-Agent": "maat-intelligence/2.0",
                         },
                     )
                     response.raise_for_status()

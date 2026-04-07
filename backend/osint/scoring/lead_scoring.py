@@ -55,6 +55,8 @@ _IRRELEVANT_KEYWORDS = {
     "obituary", "funeral", "rip", "condolences", "memorial",
     "sports score", "roster", "fantasy", "draft pick", "trade",
     "recipe", "cookbook", "restaurant review",
+    "pornstar", "porn", "xxx", "onlyfans", "escort",
+    "nylon-queens", "foxy reviews",
 }
 
 
@@ -123,6 +125,16 @@ def _relevance_score(case: Case, lead: NormalizedLead) -> tuple[float, list[str]
     if not matched_keywords and not name_present and lead.source_kind != "official":
         score -= 0.2
         reasons.append("No missing-person keywords and name not found - likely irrelevant.")
+
+    # Penalize leads where no part of the person's name appears at all.
+    # This filters cross-case contamination (e.g., different missing persons
+    # returned by broad keyword searches).
+    if case.name and lead.source_kind != "official":
+        name_parts = [p.lower() for p in case.name.split() if len(p) >= 3]
+        parts_found = sum(1 for p in name_parts if p in text_blob)
+        if parts_found == 0 and name_parts:
+            score -= 0.30
+            reasons.append("No part of the subject's name found in lead text — likely about a different person.")
 
     if lead.source_kind == "official":
         score += 0.2

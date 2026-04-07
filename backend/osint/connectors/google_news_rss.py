@@ -48,7 +48,7 @@ class GoogleNewsRssConnector:
         if not self.enabled():
             return ConnectorRunResult(warning="Google News RSS connector disabled by configuration.")
 
-        query_plan = build_news_query_plan(context, limit=4)
+        query_plan = build_news_query_plan(context, limit=6)
         if not query_plan:
             return ConnectorRunResult(warning="No news queries could be built from the case facts.")
 
@@ -71,7 +71,7 @@ class GoogleNewsRssConnector:
                     response = await client.get(
                         request_url,
                         headers={
-                            "User-Agent": "osint-missing-persons-ca/1.0",
+                            "User-Agent": "maat-intelligence/2.0",
                             "Accept": "application/rss+xml, application/xml, text/xml",
                         },
                     )

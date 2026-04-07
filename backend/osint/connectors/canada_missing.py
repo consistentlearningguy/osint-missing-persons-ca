@@ -74,7 +74,7 @@ class CanadaMissingConnector:
                     response = await client.get(
                         rss_url,
                         headers={
-                            "User-Agent": "osint-missing-persons-ca/1.0",
+                            "User-Agent": "maat-intelligence/2.0",
                             "Accept": "application/rss+xml, application/xml, text/xml",
                         },
                     )

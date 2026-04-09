@@ -6,7 +6,7 @@
 // ─── Configuration ───
 const CONFIG = {
   // Backend API — try Render hosted backend first, then localhost for dev
-  API_URLS: ["https://maat-backend.onrender.com", "http://localhost:8000", "http://127.0.0.1:8000"],
+  API_URLS: ["https://maat-backend-yzu6.onrender.com", "http://localhost:8000", "http://127.0.0.1:8000"],
   // ArcGIS direct feed for fallback
   ARCGIS_URL: "https://services.arcgis.com/Sv9ZXFjH5h1fYAaI/arcgis/rest/services/Missing_Children_Cases_View_Master/FeatureServer/0",
   // Bundled data fallback

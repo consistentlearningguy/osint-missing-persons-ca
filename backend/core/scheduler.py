@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -35,6 +36,7 @@ def start_scheduler() -> None:
         trigger="interval",
         minutes=settings.sync_interval_minutes,
         id="sync_and_export",
+        next_run_time=datetime.now(timezone.utc),
         replace_existing=True,
     )
     scheduler.start()

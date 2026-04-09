@@ -68,9 +68,9 @@ class Settings:
     )
     enable_mock_connector: bool = _bool_env("ENABLE_MOCK_CONNECTOR", False)
 
-    enable_investigator_mode: bool = _bool_env("ENABLE_INVESTIGATOR_MODE", False)
-    enable_clear_web_connectors: bool = _bool_env("ENABLE_CLEAR_WEB_CONNECTORS", False)
-    enable_public_profile_checks: bool = _bool_env("ENABLE_PUBLIC_PROFILE_CHECKS", False)
+    enable_investigator_mode: bool = _bool_env("ENABLE_INVESTIGATOR_MODE", True)
+    enable_clear_web_connectors: bool = _bool_env("ENABLE_CLEAR_WEB_CONNECTORS", True)
+    enable_public_profile_checks: bool = _bool_env("ENABLE_PUBLIC_PROFILE_CHECKS", True)
     enable_reverse_image_hooks: bool = _bool_env("ENABLE_REVERSE_IMAGE_HOOKS", False)
     enable_local_face_workflow: bool = _bool_env("ENABLE_LOCAL_FACE_WORKFLOW", False)
     enable_dark_web_connectors: bool = _bool_env("ENABLE_DARK_WEB_CONNECTORS", False)
